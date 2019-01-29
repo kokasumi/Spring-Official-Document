@@ -125,3 +125,64 @@ ApplicationContext context = new ClassPathXmlApplicationContext("services.xml", 
 - 可以使用`../`来表示父文件目录的资源路径，但是不推荐，这样使得当前应用程序与外部文件创建依赖关系。特别不建议对`classpath:`URL使用。
 - 可以使用资源的绝对路径来代替相对路径，但是需要注意使用`${...}`等占位符保持应用程序与资源绝对路径解耦。
 
+##### Groovy Bean Definition DSL
+
+外化配置元数据也可以使用Spring Grails之类的框架中Groovy Bean Definition DSL来表示，通常该类配置文件以`.groovy`结尾并采用如下结构表示：
+
+```groovy
+beans {
+    dataSource(BasicDataSource) {
+        driverClassName = "org.hsqldb.jdbcDriver"
+        url = "jdbc:hsqldb:mem:grailsDB"
+        username = "sa"
+        password = ""
+        settings = [mynew:"setting"]
+    }
+    sessionFactory(SessionFactory) {
+        dataSource = dataSource
+    }
+    myService(MyService) {
+        nestedBean = { AnotherBean bean ->
+            dataSource = dataSource
+        }
+    }
+}
+```
+
+这种配置样式在很大程度上类似于XML bean定义，甚至支持Spring的XML配置命名空间，还允许通过`importBeans`指令引入XML bean定义文件。
+
+#### 使用容器
+
+`ApplicationContext`是一种能够维护不同bean的注册表及其依赖关系的高级工厂接口，通过使用`T getBean(String name, Class<T> requiredType)`方法可以拿到bean实例。使用`ApplicationContext`能够读取并访问bean，如下所示：
+
+```java
+// create and configure beans
+ApplicationContext context = new ClassPathXmlApplicationContext("services.xml", "daos.xml");
+
+// retrieve configured instance
+PetStoreService service = context.getBean("petStore", PetStoreService.class);
+
+// use configured instance
+List<String> userList = service.getUsernameList();
+```
+
+针对Groovy配置，与XML比较类似，其有另外一个了解Groovy(也明白XML bean定义)的`ApplicationContext`实现类。
+
+```java
+ApplicationContext context = new GenericGroovyApplicationContext("services.groovy", "daos.groovy");
+```
+
+最灵活的变体是`GenericApplicationContext`，能够与Reader代理相结合。比如，针对XML文件与`XmlBeanDefinitionReader`结合；或者针对Groovy文件使用`GroovyBeanDefinitionReader`。
+
+```java
+GenericApplicationContext context = new GenericApplicationContext();
+
+//xml
+new XmlBeanDefinitionReader(context).loadBeanDefinitions("services.xml", "daos.xml");
+context.refresh();
+
+//groovy
+new GroovyBeanDefinitionReader(context).loadBeanDefinitions("services.groovy", "daos.groovy");
+context.refresh();
+```
+

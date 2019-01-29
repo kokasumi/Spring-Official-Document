@@ -37,6 +37,91 @@ Spring提供了几个`AppicationContext`接口实现，在独立应用中，通�
 
 配置元数据告诉Spring容器在应用中如何实例化，配置以及组合对象。配置元数据有3种不同的配置方式：
 
-- 使用XML格式配置
+- 使用XML格式配置。在XML顶级`<beans/>`元素中定义`<bean/>`元素。
 - 基于注解配置：Spring 2.5引入了基于注解的配置元数据格式支持
-- 基于Java代码配置：从Spring 3.0开始，Spring JavaConfig项目的很多功能都成为Spring Framework的一部分，可以使用Java代码代替XML定义外部bean
+- 基于Java代码配置：从Spring 3.0开始，Spring JavaConfig项目的很多功能都成为Spring Framework的一部分，可以使用Java代码代替XML定义外部bean。在`@Configuration`类中对应方法使用`@Bean`声明。
+
+这些bean定义对应于构成应用程序的实际对象，通常会定义服务层对象，数据访问层对象(DAO)，如Struts `Action`实例之类的表现层对象，如Hibernate `SessionFactories`，JMS `Queues`之类的基础结构对象。通常不会在容器中配置细粒度的域对象，因为创建和加载与对象是DAOs和业务逻辑层的职责。但是也可以将Spring与AspectJ结合使用来配置在IOC容器控制范围外创建的对象。
+
+```xml
+<!--XML格式配置Bean-->
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  	xsi:schemaLocation="http://www.springframework.org/schema/beans
+    	http://www.springframework.org/schema/beans/spring-beans.xsd">
+    <bean id="..." class="...">   
+        <!-- collaborators and configuration for this bean go here -->
+    </bean>
+    <bean id="..." class="...">
+        <!-- collaborators and configuration for this bean go here -->
+    </bean>
+    <!-- more bean definitions go here -->
+</beans>
+```
+
+#### 实例化容器
+
+传递给`ApplicationContext`构造器的位置路径是资源字符串，使得容器能够从外部资源(如本地文件系统/Java `CLASSPATH`等)中加载配置元数据，如下代码所示:
+
+```java
+ApplicationContext context = new ClassPathXmlApplicationContext("services.xml", "daos.xml");
+```
+
+```xml
+<!--服务层对象配置文件-->
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  	xsi:schemaLocation="http://www.springframework.org/schema/beans
+    	http://www.springframework.org/schema/beans/spring-beans.xsd">
+    <!-- services -->
+    <bean id="petStore" 		class="org.springframework.samples.jpetstore.services.PetStoreServiceImpl">
+        <property name="accountDao" ref="accountDao"/>
+        <property name="itemDao" ref="itemDao"/>
+        <!-- additional collaborators and configuration for this bean go here -->
+    </bean>
+    <!-- more bean definitions for services go here -->
+</beans>
+```
+
+```xml
+<!--数据访问对象配置文件-->
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd">
+    <bean id="accountDao"
+        class="org.springframework.samples.jpetstore.dao.jpa.JpaAccountDao">
+        <!-- additional collaborators and configuration for this bean go here -->
+    </bean>
+    <bean id="itemDao" class="org.springframework.samples.jpetstore.dao.jpa.JpaItemDao">
+        <!-- additional collaborators and configuration for this bean go here -->
+    </bean>
+    <!-- more bean definitions for data access objects go here -->
+</beans>
+```
+
+在上面的示例中，服务层由1个`PetStoreServiceImpl`类和2个类型为`JpaAccountDao`和`JpaItemDao`(基于JPA对象关系映射标准)的数据访问对象构成。属性`name`对应JavaBean的属性名，`ref`属性对应另一个Bean定义的名称，`id`和`ref`表达了协作对象之间的依赖关系。
+
+##### 编写基于XML的配置元数据
+
+跨越XML进行Bean定义是一种比较有用的方式，通常来说，每个单独的XML配置文件都代表了架构中的逻辑层或者模块。可以使用应用Context构造器从所有的XML文件中加载bean定义，该构造器可以传入多个`Resource`，或者使用1个或多个`<import/>`元素从其他xml文件加载bean定义。
+
+```xml
+<beans>
+    <import resource="services.xml"/>
+    <import resource="resources/messageSource.xml"/>
+    <import resource="/resources/themeSource.xml"/>
+
+    <bean id="bean1" class="..."/>
+    <bean id="bean2" class="..."/>
+</beans>
+```
+
+- 以上xml文件引入了3个xml文件(`service.xml`,`messageSource.xml`,`themeSource.xml`)定义的bean。
+- 引入文件的位置都是相对于执行引入xml文件路径。
+- 可以使用`../`来表示父文件目录的资源路径，但是不推荐，这样使得当前应用程序与外部文件创建依赖关系。特别不建议对`classpath:`URL使用。
+- 可以使用资源的绝对路径来代替相对路径，但是需要注意使用`${...}`等占位符保持应用程序与资源绝对路径解耦。
+

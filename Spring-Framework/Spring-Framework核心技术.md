@@ -41,7 +41,7 @@ Spring提供了几个`AppicationContext`接口实现，在独立应用中，通�
 - 基于注解配置：Spring 2.5引入了基于注解的配置元数据格式支持
 - 基于Java代码配置：从Spring 3.0开始，Spring JavaConfig项目的很多功能都成为Spring Framework的一部分，可以使用Java代码代替XML定义外部bean。在`@Configuration`类中对应方法使用`@Bean`声明。
 
-这些bean定义对应于构成应用程序的实际对象，通常会定义服务层对象，数据访问层对象(DAO)，如Struts `Action`实例之类的表现层对象，如Hibernate `SessionFactories`，JMS `Queues`之类的基础结构对象。通常不会在容器中配置细粒度的域对象，因为创建和加载与对象是DAOs和业务逻辑层的职责。但是也可以将Spring与AspectJ结合使用来配置在IOC容器控制范围外创建的对象。
+这些bean定义对应于构成应用程序的实际对象，通常会定义服务层对象，数据访问层对象(DAO)，如Struts `Action`实例之类的表现层对象，如Hibernate `SessionFactories`，JMS `Queues`之类的基础结构对象。通常不会在容器中配置细粒度的域对象，因为创建和加载域对象是DAOs和业务逻辑层的职责。但是也可以将Spring与AspectJ结合使用来配置在IOC容器控制范围外创建的对象。
 
 ```xml
 <!--XML格式配置Bean-->
@@ -172,7 +172,7 @@ List<String> userList = service.getUsernameList();
 ApplicationContext context = new GenericGroovyApplicationContext("services.groovy", "daos.groovy");
 ```
 
-最灵活的变体是`GenericApplicationContext`，能够与Reader代理相结合。比如，针对XML文件与`XmlBeanDefinitionReader`结合；或者针对Groovy文件使用`GroovyBeanDefinitionReader`。
+最灵活的变体是`GenericApplicationContext`，能够与Reader代理相结合。比如，针对XML文件与`XmlBeanDefinitionReader`结合；或者针对Groovy文件使用`GroovyBeanDefinitionReader`。可以
 
 ```java
 GenericApplicationContext context = new GenericApplicationContext();
@@ -186,3 +186,43 @@ new GroovyBeanDefinitionReader(context).loadBeanDefinitions("services.groovy", "
 context.refresh();
 ```
 
+可以在同一个`ApplicationContext`中混合匹配Reader代理，从不同的配置源中读取bean定义。使用`ApplicationContext`的`getBean()`之类的方法可以检索bean实例，但是在实际应用程序中，应该保持不调用这些方法和不依赖于Spring API的原则。如Spring和Web框架的集成为各种Web框架组件(如控制器和JSF托管bean)提供依赖注入，允许通过元数据声明对特定bean的依赖性。
+
+### Bean简介
+
+Spring IOC容器管理一个或者多个bean，这些bean使用提供给容器的配置元数据创建。在容器内部，这些bean定义表示为`BeanDefinition`对象，其中包括以下元数据：
+
+- 完全限定的包类名：通常是被定义bean的实际实现类。
+- Bean行为配置元素，描述了bean在容器中的行为方式(如范围，生命周期回调等)
+- bean正常工作需要使用的其他bean引用，这些引用也称作协作者或者依赖项
+- 新创建对象中的其他配置，如池的大小限制或者管理连接池中的使用bean连接数
+
+这些元数据转换为构成bean定义的一组属性，其中的属性包括：
+
+| Property                 | Explained in...                                              |
+| ------------------------ | ------------------------------------------------------------ |
+| Class                    | [Instantiating Beans](https://docs.spring.io/spring-framework/docs/current/spring-framework-reference/core.html#beans-factory-class) |
+| Name                     | [Naming Beans](https://docs.spring.io/spring-framework/docs/current/spring-framework-reference/core.html#beans-beanname) |
+| Scope                    | [Bean Scopes](https://docs.spring.io/spring-framework/docs/current/spring-framework-reference/core.html#beans-factory-scopes) |
+| Constructor arguments    | [Dependency Injection](https://docs.spring.io/spring-framework/docs/current/spring-framework-reference/core.html#beans-factory-collaborators) |
+| Properties               | [Dependency Injection](https://docs.spring.io/spring-framework/docs/current/spring-framework-reference/core.html#beans-factory-collaborators) |
+| Autowiring mode          | [Autowiring Collaborators](https://docs.spring.io/spring-framework/docs/current/spring-framework-reference/core.html#beans-factory-autowire) |
+| Lazy initialization mode | [Lazy-initialized Beans](https://docs.spring.io/spring-framework/docs/current/spring-framework-reference/core.html#beans-factory-lazy-init) |
+| Initialization method    | [Initialization Callbacks](https://docs.spring.io/spring-framework/docs/current/spring-framework-reference/core.html#beans-factory-lifecycle-initializingbean) |
+| Destruction method       | [Destruction Callbacks](https://docs.spring.io/spring-framework/docs/current/spring-framework-reference/core.html#beans-factory-lifecycle-disposablebean) |
+
+除了包含如何创建特殊bean的定义信息之外，`ApplicationContext`也允许注册容器外部创建的对象。这是通过`getBeanFactory()`方法访问ApplicationContext的BeanFactory实现的，该方法返回值为`DefaultListableBeanFactory`，支持通过`registerSingleton(..)`和`registerBeanDefinition(..)`方法来注册。
+
+> 注：Bean元数据和手动提供的单例实例需要尽早注册，以便容器在自动装配及其他自查步骤期间能够合理的了解分配。虽然在某种程度上支持覆盖现有元数据和单例实例，在运行时注册新bean不是官方支持，可能会导致并发访问异常，bean容器中的状态不一致等。
+
+#### Bean命名
+
+每个bean都有一个或者多个标识符，这些 标识符在托管bean的容器中必须是唯一的。bean通常只有一个标识符，但如果需要多个标识符，其他的可以被视作别名。
+
+在基于XML的配置元数据中，可以使用`id`属性，`name`属性或者两者来指定bean标识符。`id`属性允许指定一个id，`name`属性通常由字母/数字/特殊字符组成。如果想要给bean引入其他别名，可以使用`逗号(,)`，`分号(;)`或者空格分隔的字符串定义`name`属性。在Spring 3.1之前版本，`id`属性被定义成`xsd:ID`类型，约束了一些字符定义。从3.1版本开始，`id`属性就被定义成`xsd:string`类型，不再约束字符定义，bean ID唯一性仍由容器强制执行，但不再由XML解析器强制执行。
+
+不一定需要给bean显示提供`id`和`name`属性，如果未明确提供`name`或者`id`，容器会给该bean生成唯一的标识。但如果想要通过名称引用该bean，通过使用`ref`元素或者Service Locator方式查找，必须提供名称标识。不提供名称的目的与使用[inner beans](https://docs.spring.io/spring-framework/docs/current/spring-framework-reference/core.html#beans-inner-beans)和[autowiring collaborators](https://docs.spring.io/spring-framework/docs/current/spring-framework-reference/core.html#beans-factory-autowire)有关。
+
+> Bean命名约定：使用标准java约定作为实例字段名称。也就是说，bean命名使用驼峰格式以小写字母开头，Bean命名始终需要遵守易于阅读理解的原则。
+
+在定义bean时，可通过使用`id`属性和任意多`name`属性结合为bean提供过个名称
